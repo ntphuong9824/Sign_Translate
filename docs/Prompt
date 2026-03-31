@@ -1,0 +1,228 @@
+🟦 Phase 1 – Project Setup & Infrastructure
+Read `migration-plan.md` and `sign-mt-architecture.md` to understand the full context.
+
+Then execute **Phase 1: Project Setup & Infrastructure** only. Do NOT proceed to Phase 2.
+
+Tasks:
+- Initialize Spring Boot project using Maven with dependencies:
+  `spring-web`, `spring-security`, `spring-data-jpa`, `lombok`, `openai-java`, `aws-java-sdk-s3`
+- Initialize React project using Vite + TypeScript
+- Set up `docker-compose.yml` with services:
+  - `backend` (Spring Boot, port 8080)
+  - `frontend` (React, port 5173)
+  - `db` (PostgreSQL, port 5432)
+- Create `.env.example` listing all required environment variables:
+  `OPENAI_API_KEY`, `AWS_S3_BUCKET`, `JWT_SECRET`, `VITE_API_BASE_URL`, `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
+
+When done:
+1. List all created files with relative paths
+2. Confirm docker-compose starts all services without errors
+3. Mark Phase 1 checklist items as `- [x]` in `migration-plan.md`
+
+🟦 Phase 2 – Spring Boot Backend
+Phase 1 is complete. Now execute **Phase 2: Spring Boot Backend** only. Do NOT proceed to Phase 3.
+
+Tasks:
+- Create package structure inside `src/main/java/`:
+  `controller`, `service`, `repository`, `model`, `config`, `exception`, `dto`
+- Implement the following REST controllers with corresponding Service classes:
+  - `TextNormalizationController` → `POST /api/normalize`
+  - `TextTranslationController` → `POST /api/translate`
+  - `SpokenToSignedController` → `POST /api/spoken-to-signed`
+  - `AvatarController` → `GET /api/avatars` and `POST /api/avatars/{avatarId}`
+- Rules for all controllers:
+  - Use constructor injection (no @Autowired on fields)
+  - Each controller has a dedicated Service class
+  - Each endpoint has dedicated Request/Response DTO classes
+- Add global exception handler using `@RestControllerAdvice`
+- Add `application.yml` with environment variable bindings
+
+When done:
+1. List all created files with relative paths
+2. Confirm project compiles with `mvn clean compile`
+3. Mark Phase 2 checklist items as `- [x]` in `migration-plan.md`
+
+🟦 Phase 3 – Text Processing Pipeline
+Phase 2 is complete. Now execute **Phase 3: Text Processing Pipeline**
+using **Google Gemini API** (NOT OpenAI). Do NOT proceed to Phase 4.
+
+Tasks:
+- Add Gemini config class `GeminiConfig.java` in `config/` package:
+  - Reads `GEMINI_API_KEY` and `GEMINI_MODEL` from application.yml
+  - Exposes a configured `GenerativeModel` bean
+
+- Implement `TextNormalizationService`:
+  - Uses Gemini `gemini-1.5-flash` model
+  - System prompt: correct spelling, capitalization, and formatting only
+  - Returns normalized text string
+
+- Implement `TextTranslationService`:
+  - Uses Gemini `gemini-1.5-flash` model
+  - Accepts `sourceLanguage` and `targetLanguage` as parameters
+  - Returns translated text string
+
+- Implement `SpokenToSignedService`:
+  - Orchestrates: normalization → translation → pose data generation
+  - Uses Gemini to generate structured pose data as JSON
+  - Returns pose data compatible with React frontend
+
+- Gemini call template to use across all services:
+```java
+  GenerativeModel model = new GenerativeModel(modelName, vertexAi);
+  GenerateContentResponse response = model.generateContent(prompt);
+  String result = ResponseHandler.getText(response);
+```
+
+- Add retry logic (3 attempts) and timeout (30s) for all Gemini API calls
+- Add unit tests for all 3 services using JUnit 5 + Mockito
+  (mock the GenerativeModel bean)
+
+When done:
+1. List all created/modified files with relative paths
+2. Confirm all unit tests pass with `mvn test`
+3. Mark Phase 3 checklist items as `- [x]` in `migration-plan.md`
+
+🟦 Phase 4 – React Frontend
+Phase 3 is complete. Now execute **Phase 4: React Frontend Migration** only. Do NOT proceed to Phase 5.
+
+Tasks:
+- Create the following services under `src/services/`:
+  - `translateService.ts` – calls Spring Boot API at `VITE_API_BASE_URL` (replaces Firebase calls)
+  - `signWritingService.ts` – maps pose data returned from backend to sign components
+  - `handsService.ts` – hand gesture logic
+  - `bodyService.ts` – body posture logic
+  - `faceService.ts` – facial expression logic
+- Create the following components under `src/components/`:
+  - `TranslateComponent.tsx` – main translation UI with input field and submit button
+  - `AvatarRenderer.tsx` – Three.js canvas for 3D avatar rendering using GLB models
+- Rules:
+  - Replace all Firebase Storage URLs with `import.meta.env.VITE_API_BASE_URL`
+  - Keep all Three.js and GLB model loading logic intact
+  - Use React hooks only (no class components)
+  - Use TypeScript interfaces for all pose data structures
+- Add Axios instance in `src/lib/axiosClient.ts` with base URL and auth header interceptor
+
+When done:
+1. List all created files with relative paths
+2. Confirm project builds with `npm run build`
+3. Mark Phase 4 checklist items as `- [x]` in `migration-plan.md`
+
+🟦 Phase 5 – Asset & Storage Migration
+Phase 4 is complete. Now execute **Phase 5: Asset & Storage Migration**
+using **Firebase Storage** (NOT AWS S3). Do NOT proceed to Phase 6.
+
+Tasks:
+- Create `FirebaseConfig.java` in `config/` package:
+  - Reads credentials from `FIREBASE_CREDENTIALS_PATH`
+  - Initializes `FirebaseApp` bean
+  - Exposes `Storage` bean from `StorageClient.getInstance().bucket()`
+  - Example:
+```java
+    @Bean
+    public FirebaseApp firebaseApp() throws IOException {
+        FileInputStream serviceAccount =
+            new FileInputStream(credentialsPath);
+        FirebaseOptions options = FirebaseOptions.builder()
+            .setCredentials(GoogleCredentials
+                .fromStream(serviceAccount))
+            .setStorageBucket(storageBucket)
+            .build();
+        return FirebaseApp.initializeApp(options);
+    }
+```
+
+- Implement `StorageService.java` in `service/` package:
+  - `uploadFile(MultipartFile file, String fileName)`:
+    - Uploads file to Firebase Storage
+    - Returns public download URL
+  - `deleteFile(String fileName)`:
+    - Deletes file from Firebase Storage
+  - `getSignedUrl(String fileName, long expirationMinutes)`:
+    - Generates a signed URL for secure temporary access
+  - Example upload pattern:
+```java
+    Bucket bucket = StorageClient.getInstance().bucket();
+    bucket.create(fileName, file.getInputStream(),
+                  file.getContentType());
+```
+
+- Implement `AssetController.java` in `controller/` package:
+  - `GET /api/assets/{filename}` → returns signed URL for file
+  - `POST /api/assets/upload` → uploads file, returns download URL
+  - `DELETE /api/assets/{filename}` → deletes file
+
+- Copy all existing model files into React project
+  under `public/assets/models/`:
+  - `pose-animation/model.json`
+  - `hand-shape/model.json`
+  - `face-features/model.json`
+  - `sign-detector/model.json`
+  - All `.glb` and `.png` model files
+
+- Update `AvatarRenderer.tsx`:
+  - Load static GLB models from `/assets/models/` (public path)
+  - Load dynamic avatar images via signed URLs from
+    `GET /api/assets/{filename}`
+
+- Add unit tests for `StorageService` using JUnit 5 + Mockito
+  (mock the Firebase `Bucket` object)
+
+When done:
+1. List all created/modified files with relative paths
+2. Confirm avatar loads correctly in `AvatarRenderer.tsx`
+3. Mark Phase 5 checklist items as `- [x]` in `migration-plan.md`
+🟦 Phase 6 – Authentication
+Phase 5 is complete. Now execute **Phase 6: Authentication** only. Do NOT proceed to Phase 7.
+
+Tasks:
+- Implement JWT-based authentication using Spring Security:
+  - `AuthController` with:
+    - `POST /api/auth/register` – register new user
+    - `POST /api/auth/login` – returns JWT token
+  - `JwtTokenFilter` extending `OncePerRequestFilter` to validate token on each request
+  - `JwtTokenProvider` service to generate and validate JWT tokens
+  - Read JWT secret from env variable `JWT_SECRET`
+- Configure Spring Security:
+  - Permit all requests to `/api/auth/**`
+  - Require authentication for all other `/api/**` endpoints
+  - Disable CSRF (REST API)
+  - Set session management to STATELESS
+- Create `User` entity and `UserRepository`
+- Create `UserDetailsServiceImpl` implementing Spring's `UserDetailsService`
+- Update `axiosClient.ts` in React to attach JWT token from localStorage to every request header:
+  `Authorization: Bearer <token>`
+- Add login/register UI in React under `src/components/AuthComponent.tsx`
+
+When done:
+1. List all created/modified files with relative paths
+2. Confirm protected endpoints return 401 without token
+3. Confirm login returns a valid JWT token
+4. Mark Phase 6 checklist items as `- [x]` in `migration-plan.md`
+
+🟦 Phase 7 – Testing & Finalization
+Phase 6 is complete. Now execute **Phase 7: Testing & Finalization** — the final phase.
+
+Tasks:
+- Backend tests:
+  - Unit tests for all Service classes using JUnit 5 + Mockito
+  - Integration tests for all Controller endpoints using MockMvc
+  - Test coverage must include: happy path, invalid input (400), unauthorized (401), not found (404)
+- Frontend tests:
+  - Component tests for `TranslateComponent.tsx` and `AvatarRenderer.tsx` using Vitest + React Testing Library
+  - Test: text input submission triggers API call
+  - Test: avatar renders when pose data is received
+- End-to-end validation:
+  - Confirm full pipeline works: text input → normalization → translation → pose data → avatar animation
+  - Confirm Docker Compose starts all services: `docker-compose up --build`
+  - Confirm `mvn clean install` passes with no errors
+  - Confirm `npm run build` passes with no errors
+- Finalization:
+  - Update `migration-plan.md` marking ALL remaining `- [ ]` items as `- [x]`
+  - Generate `CHANGELOG.md` summarizing every change made across all 7 phases
+  - Generate `README.md` with: project overview, local setup instructions, environment variables table, API endpoint reference
+
+When done, confirm:
+1. All tests pass (backend + frontend)
+2. Docker Compose runs without errors
+3. `CHANGELOG.md` and `README.md` are created
+4. All checklist items in `migration-plan.md` are marked `- [x]`

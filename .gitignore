@@ -1,0 +1,10 @@
+.env
+.env.local
+config/firebase-service-account.json
+docs/sign.mt
+
+# Local tooling metadata
+.idea/
+.omc/
+.claude/
+

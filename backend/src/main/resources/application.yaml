@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://db:5432/signlanguage}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+server:
+  port: 8080
+
+gemini:
+  api-key: ${GEMINI_API_KEY}
+  model: ${GEMINI_MODEL:gemini-1.5-flash}
+
+firebase:
+  storage-bucket: ${FIREBASE_STORAGE_BUCKET}
+  project-id: ${FIREBASE_PROJECT_ID}
+  credentials-path: ${FIREBASE_CREDENTIALS_PATH:/app/config/firebase-service-account.json}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000
