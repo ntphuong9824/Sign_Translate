@@ -1,5 +1,6 @@
 .env
 .env.local
+.env.example
 config/firebase-service-account.json
 docs/sign.mt
 
